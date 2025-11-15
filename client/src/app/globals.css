@@ -318,3 +318,23 @@ body {
   @apply bg-muted hover:bg-muted-foreground rounded-lg;
 
 }
+
+/* Custom styles for Leaflet popup card */
+.report-popup .leaflet-popup-content-wrapper {
+  background: transparent;
+  padding: 0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: none;
+}
+
+.report-popup .leaflet-popup-content {
+  margin: 0;
+  padding: 0;
+  line-height: inherit;
+}
+
+/* Removes the little triangle arrow */
+.report-popup .leaflet-popup-tip-container {
+  display: none;
+}

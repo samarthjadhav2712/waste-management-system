@@ -5,7 +5,7 @@ import { Leaf } from "lucide-react"
 const Footer = () => {
   return (
     <motion.footer
-      className="bg-surface border-t border-muted mt-20"
+      className="bg-background border-b border-muted mt-20"
       initial={{ opacity: 0 }}
       whileInView={{ opacity: 1 }}
       transition={{ duration: 0.8 }}

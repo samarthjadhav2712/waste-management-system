@@ -1,8 +1,41 @@
-import { motion } from "framer-motion"
+import { motion, useMotionValue, useTransform, animate, useInView } from "framer-motion"
 import { MapPin, Camera, BarChart3, Leaf, Users, Check } from "lucide-react"
 import { Link } from "react-router-dom"
-import Header from "../components/Header"
-import Footer from "../components/Footer"
+import Header from "../components/Header" // <-- Restored original import
+import Footer from "../components/Footer" // <-- Restored original import
+import { useEffect, useRef } from "react"
+
+// --- AnimatedCounter Component ---
+// This component counts up from 0 to the target number.
+const AnimatedCounter = ({ to }) => {
+  const count = useMotionValue(0)
+  const rounded = useTransform(count, (latest) => Math.round(latest))
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true })
+
+  useEffect(() => {
+    if (inView) {
+      animate(count, to, { duration: 1.5, ease: "easeOut" })
+    }
+  }, [inView, count, to])
+
+  return <motion.span ref={ref}>{rounded}</motion.span>
+}
+
+// --- FeatureCard Component ---
+// We extract the feature card to make the marquee code cleaner.
+const FeatureCard = ({ feature }) => {
+  const IconComponent = feature.icon
+  return (
+    <div className="shrink-0 w-80 md:w-96 p-8 bg-background rounded-xl border border-muted mx-4">
+      <div className="mb-4 inline-block p-3 bg-accent-green/10 rounded-lg">
+        <IconComponent className="w-8 h-8 text-accent-green" />
+      </div>
+      <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
+      <p className="text-muted-foreground leading-relaxed">{feature.description}</p>
+    </div>
+  )
+}
 
 const LandingPage = () => {
   const features = [
@@ -37,85 +70,133 @@ const LandingPage = () => {
       description: "Official approval and before-after documentation",
     },
   ]
-
-  const containerVariants = {
+  
+  // --- Animation Variants ---
+  
+  // For letter-by-letter title animation
+  const titleVariants = {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
       transition: {
         staggerChildren: 0.1,
-        delayChildren: 0.3,
       },
     },
   }
-
-  const itemVariants = {
+  
+  const letterVariants = {
     hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } },
+  }
+  const title = "Prakriti"
+
+  // For word-by-word subtitle animation
+  const subtitleVariants = {
+    hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      y: 0,
-      transition: { duration: 0.8, ease: "easeOut" },
+      transition: {
+        staggerChildren: 0.08,
+      },
     },
   }
+  const subtitleWordVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" } },
+  }
+  const subtitle = "Smart Waste Monitoring for Cleaner Cities"
 
   return (
-    <div className="bg-linear-to-b from-background via-background to-surface text-foreground">
+    // --- Static gradient to prevent flash ---
+    <div className="text-foreground bg-linear-to-b from-background to-surface">
       <Header />
 
       {/* Hero Section */}
-      <section className="min-h-screen flex items-center justify-center px-4 md:px-8">
+      <section className="min-h-screen flex items-center justify-center px-4 md:px-8 overflow-hidden">
         <motion.div
-          className="text-center max-w-4xl mx-auto"
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8 }}
+          className="text-center max-w-4xl mx-auto -mt-30"
+          initial="hidden"
+          animate="visible"
         >
           <motion.div
             className="mb-8"
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
+            variants={{
+              hidden: { scale: 0.9, opacity: 0 },
+              visible: { scale: 1, opacity: 1, transition: { duration: 0.8, delay: 0.2 } }
+            }}
           >
-            <div className="flex items-center justify-center mb-6">
-              <Leaf className="w-16 h-16 text-accent-green animate-pulse" />
-            </div>
-            <h1 className="text-5xl md:text-7xl font-bold text-pretty leading-tight mb-6">Prakriti</h1>
-            <p className="text-xl md:text-2xl text-muted-foreground text-pretty mb-8">
-              Smart Waste Monitoring for Cleaner Cities
-            </p>
+            <motion.div 
+              className="flex items-center justify-center mb-6"
+              animate={{ y: [0, -10, 0] }} // Floating animation
+              transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Leaf className="w-16 h-16 text-accent-green" />
+            </motion.div>
+            
+            {/* Letter-by-letter Title Animation */}
+            <motion.h1 
+              className="text-5xl md:text-7xl font-bold text-pretty leading-tight mb-6"
+              variants={titleVariants}
+            >
+              {title.split("").map((char, index) => (
+                <motion.span 
+                  key={index} 
+                  className="inline-block"
+                  variants={letterVariants}
+                >
+                  {char}
+                </motion.span>
+              ))}
+            </motion.h1>
+            
+            {/* Word-by-word Subtitle Animation */}
+            <motion.p 
+              className="text-xl md:text-2xl text-muted-foreground text-pretty mb-8"
+              variants={subtitleVariants}
+            >
+              {subtitle.split(" ").map((word, index) => (
+                <motion.span 
+                  key={index} 
+                  className="inline-block mr-2"
+                  variants={subtitleWordVariants}
+                >
+                  {word}
+                </motion.span>
+              ))}
+            </motion.p>
           </motion.div>
 
           <motion.p
             className="text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl mx-auto leading-relaxed"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.4 }}
+            variants={subtitleWordVariants} // Re-use variant
           >
             Empower citizens to report waste hotspots, help officials track cleanup efforts, and build a cleaner
             community together through crowdsourced data and real-time collaboration.
           </motion.p>
-
+          
           <motion.div
-            className="flex flex-col sm:flex-row gap-4 justify-center items-center"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
+            variants={subtitleWordVariants}
           >
-            <Link
-              to="/auth"
-              className="px-8 py-4 bg-accent-green text-background rounded-lg font-semibold hover:bg-accent-green-dark transition-all hover:scale-105"
+            <motion.div
+              className="inline-block"
+              whileHover={{ scale: 1.05 }}
+              transition={{ type: "spring", stiffness: 300 }}
             >
-              Get Started
-            </Link>
+              <Link
+                to="/auth"
+                className="px-8 py-4 bg-accent-green text-background rounded-lg font-semibold hover:bg-accent-green-dark transition-all"
+              >
+                Get Started
+              </Link>
+            </motion.div>
           </motion.div>
         </motion.div>
       </section>
 
-      {/* Features Section */}
-      <section className="py-10 md:py-22 px-4 md:px-8 bg-surface">
-        <div className="max-w-6xl mx-auto">
+      {/* --- Features Section (Marquee) --- */}
+      <section className="py-20 md:py-22 px-0 md:px-0 bg-surface overflow-hidden">
+        <div className="max-w-6xl mx-auto text-center mb-16 px-4">
           <motion.div
-            className="text-center mb-16"
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             transition={{ duration: 0.8 }}
@@ -124,40 +205,26 @@ const LandingPage = () => {
             <h2 className="text-4xl md:text-5xl font-bold mb-4">Powerful Features</h2>
             <p className="text-muted-foreground text-lg">Everything you need to make an impact</p>
           </motion.div>
+        </div>
 
+        {/* --- Single Marquee Row --- */}
+        <div className="w-full overflow-hidden mb-8">
           <motion.div
-            className="grid md:grid-cols-2 lg:grid-cols-3 gap-8"
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true }}
+            className="flex"
+            animate={{ x: [0, "-100%"] }}
+            transition={{ duration: 40, repeat: Infinity, ease: "linear" }}
           >
-            {features.map((feature, index) => {
-              const IconComponent = feature.icon
-              return (
-                <motion.div
-                  key={index}
-                  className="p-8 bg-background rounded-xl border border-muted hover:border-accent-green transition-all hover:shadow-lg hover:shadow-accent-green/20"
-                  variants={itemVariants}
-                >
-                  <motion.div
-                    className="mb-4 inline-block p-3 bg-accent-green/10 rounded-lg"
-                    whileHover={{ rotate: 360, scale: 1.1 }}
-                    transition={{ duration: 0.6 }}
-                  >
-                    <IconComponent className="w-8 h-8 text-accent-green" />
-                  </motion.div>
-                  <h3 className="text-xl font-bold mb-3">{feature.title}</h3>
-                  <p className="text-muted-foreground leading-relaxed">{feature.description}</p>
-                </motion.div>
-              )
-            })}
+            {/* Render full list twice for seamless loop */}
+            {[...features, ...features].map((feature, index) => (
+              <FeatureCard feature={feature} key={`feature-${index}`} />
+            ))}
           </motion.div>
         </div>
+        
       </section>
 
-      {/* Impact Section */}
-      <section className="py-20 md:py-32 px-4 md:px-8">
+      {/* --- Impact Section (Animated Counter) --- */}
+      <section className="py-20 md:py-32 px-4 md:px-8 ">
         <div className="max-w-6xl mx-auto">
           <motion.div
             className="text-center mb-16"
@@ -171,20 +238,26 @@ const LandingPage = () => {
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { value: "50K+", label: "Reports Filed" },
-              { value: "15K+", label: "Cleanups Completed" },
-              { value: "200+", label: "Active Citizens" },
+              { value: 50, label: "K+ Reports Filed" },
+              { value: 15, label: "K+ Cleanups Completed" },
+              { value: 200, label: "+ Active Citizens" },
             ].map((stat, index) => (
               <motion.div
                 key={index}
-                className="text-center p-4 rounded-xl bg-surface border border-muted"
+                className="text-center p-8 rounded-xl bg-background border border-surface"
                 initial={{ scale: 0.9, opacity: 0 }}
                 whileInView={{ scale: 1, opacity: 1 }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
                 viewport={{ once: true }}
               >
-                <p className="text-4xl md:text-5xl font-bold text-accent-green mb-2">{stat.value}</p>
-                <p className="text-muted-foreground text-lg">{stat.label}</p>
+                <p className="text-5xl md:text-6xl font-bold text-accent-green mb-2">
+                  <AnimatedCounter to={stat.value} />
+                  {/* Suffix is added here */}
+                  {stat.label.split(" ")[0].replace(/[0-9]/g, '')} 
+                </p>
+                <p className="text-muted-foreground text-lg">
+                  {stat.label.substring(stat.label.indexOf(" ") + 1)}
+                </p>
               </motion.div>
             ))}
           </div>
