@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useContext } from "react"
-import { motion } from "framer-motion"
-import { MapPin, Camera, Send, Loader, Check, X, Sun, Moon } from "lucide-react"
-import Map from "../components/Map" // Make sure this path is correct
+import { motion, AnimatePresence } from "framer-motion"
+import { MapPin, Camera, Send, Loader, Check, X, Sun, Moon, Info } from "lucide-react"
+import Map from "../components/Map"
 import { ThemeContext } from "../contexts/ThemeContext"
+import apiClient from "../api/apiClient" // Import the new apiClient
+import { useAuth } from "../contexts/AuthContext" // Import useAuth
 
 // Import New Reusable Components
 import Analytics from "../components/Analytics"
@@ -10,100 +12,115 @@ import ReportSection from "../components/ReportSection"
 
 // --- HELPER FUNCTION 1 ---
 const getDistanceInMeters = (loc1, loc2) => {
-  // ... (function code is correct)
-  if (!loc1 || !loc2) return Infinity
-  const R = 6371e3 // metres
-  const φ1 = (loc1.lat * Math.PI) / 180 // φ, λ in radians
-  const φ2 = (loc2.lat * Math.PI) / 180
-  const Δφ = ((loc2.lat - loc1.lat) * Math.PI) / 180
-  const Δλ = ((loc2.lng - loc1.lng) * Math.PI) / 180
+  if (!loc1 || !loc2) return Infinity
+  const R = 6371e3 // metres
+  const φ1 = (loc1.lat * Math.PI) / 180 // φ, λ in radians
+  const φ2 = (loc2.lat * Math.PI) / 180
+  const Δφ = ((loc2.lat - loc1.lat) * Math.PI) / 180
+  const Δλ = ((loc2.lng - loc1.lng) * Math.PI) / 180
 
-  const a =
-    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
-  return R * c // in metres
+  return R * c // in metres
 }
 
-// --- HELPER FUNCTION 2 ---
-const findMatchingPairs = (submissions, targetStatus) => {
-  // ... (function code is correct)
-  const beforeReports = submissions.filter(s => s.type === 'before' && s.status === targetStatus)
-  const afterReports = submissions.filter(s => s.type === 'after' && s.status === targetStatus)
-  const pairs = []
-  const matchedAfterIds = new Set()
-
-  for (const before of beforeReports) {
-    let bestMatch = null
-    let minDistance = Infinity
-
-    for (const after of afterReports) {
-      if (matchedAfterIds.has(after.id)) continue 
-      const distance = getDistanceInMeters(before.location, after.location)
-      
-      if (distance < minDistance && distance <= 50) { // 50-meter threshold
-        minDistance = distance
-        bestMatch = after
-      }
-    }
-
-    if (bestMatch) {
-      pairs.push({
-        id: before.id, // Use before's ID as the pair ID
-        beforeReport: before,
-        afterReport: bestMatch,
-      })
-      matchedAfterIds.add(bestMatch.id)
-    }
+/**
+ * --- HELPER FUNCTION: Data Transformer ---
+ * Transforms flat backend data into the nested { beforeReport, afterReport }
+ * object that <ReportCardPaired> expects.
+ */
+const transformToPair = (row) => ({
+  id: row.id,
+  beforeReport: {
+    id: row.id,
+    image: row.image_path,
+    description: row.description,
+    timestamp: row.created_at,
+    location: { lat: row.lat, lon: row.lon },
+  },
+  afterReport: {
+    id: row.cleanup_id,
+    image: row.cleanup_image,
+    timestamp: row.cleanup_at,
   }
-  return pairs
-}
+});
 
-
-const CitizenDashboard = ({ onLogout }) => {
-  // --- STATE FOR FORM 1 (REPORT WASTE) ---
+const CitizenDashboard = () => {
+  // --- AUTH & THEME ---
+  const { isDark, toggleTheme } = useContext(ThemeContext)
+  const { user, logout } = useAuth(); // Get the logged-in user and logout function
+  
+  // --- STATE FOR FORMS ---
   const [hasLocationBefore, setHasLocationBefore] = useState(false)
   const [locationBefore, setLocationBefore] = useState(null)
   const [imageBefore, setImageBefore] = useState(null)
   const [descriptionBefore, setDescriptionBefore] = useState("")
   const [isSubmittingBefore, setIsSubmittingBefore] = useState(false)
+  const [submissionStatus, setSubmissionStatus] = useState("Submit Report");
 
-  // --- STATE FOR FORM 2 (AFTER CLEANUP) ---
   const [hasLocationAfter, setHasLocationAfter] = useState(false)
   const [locationAfter, setLocationAfter] = useState(null)
   const [imageAfter, setImageAfter] = useState(null)
   const [descriptionAfter, setDescriptionAfter] = useState("")
   const [isSubmittingAfter, setIsSubmittingAfter] = useState(false)
-  
-  // --- MAIN SUBMISSIONS STATE ---
-  const [submissions, setSubmissions] = useState([
-    // Mock Data Example:
-    { id: 1, type: 'before', image: "https://via.placeholder.com/400x300.png?text=Before+1", description: "Waste pile at corner", location: { lat: 12.9716, lng: 77.5946 }, timestamp: new Date(Date.now() - 86400000), status: 'pending' },
-    { id: 2, type: 'after', image: "https://via.placeholder.com/400x300.png?text=After+1", description: "Cleaned up corner", location: { lat: 12.9717, lng: 77.5947 }, timestamp: new Date(Date.now() - 3600000), status: 'pending' },
-    { id: 3, type: 'before', image: "https://via.placeholder.com/400x300.png?text=Before+2", description: "Overflowing bin", location: { lat: 12.9736, lng: 77.5966 }, timestamp: new Date(Date.now() - 172800000), status: 'verified' },
-    { id: 4, type: 'after', image: "https://via.placeholder.com/400x300.png?text=After+2", description: "Bin is now clean", location: { lat: 12.9736, lng: 77.5966 }, timestamp: new Date(Date.now() - 86400000), status: 'verified' },
-    { id: 5, type: 'before', image: "https://via.placeholder.com/400x300.png?text=Before+3", description: "Litter on sidewalk", location: { lat: 12.9756, lng: 77.5986 }, timestamp: new Date(Date.now() - 1800000), status: 'pending' },
-  ])
+  const [selectedReportId, setSelectedReportId] = useState("");
+
+  // --- API DATA STATE ---
+  const [analytics, setAnalytics] = useState(null);
+  const [pendingBeforeReports, setPendingBeforeReports] = useState([]);
+  const [completedPairs, setCompletedPairs] = useState([]);
+  const [verifiedPairs, setVerifiedPairs] = useState([]);
   
   // --- CAMERA STATE & REFS ---
   const [cameraOpen, setCameraOpen] = useState(false)
-  const [cameraType, setCameraType] = useState(null) // "before" or "after"
+  const [cameraType, setCameraType] = useState(null)
   const [stream, setStream] = useState(null)
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   
-  const { isDark, toggleTheme } = useContext(ThemeContext)
+  // --- MESSAGE MODAL STATE ---
+  const [message, setMessage] = useState(null);
 
-  // --- CALCULATE STATS (NEW LOGIC) ---
-  const pendingBeforeReports = submissions.filter(s => s.type === 'before' && s.status === 'pending')
-  const completedPairsPending = findMatchingPairs(submissions, 'pending')
-  const verifiedPairs = findMatchingPairs(submissions, 'verified')
-  
-  const pendingCount = pendingBeforeReports.length
-  const completedCount = completedPairsPending.length
-  const verifiedCount = verifiedPairs.length
+  const showMessage = (text, type = "info") => {
+    setMessage({ text, type });
+    setTimeout(() => {
+      setMessage(null);
+    }, 4000);
+  };
+
+  // --- DATA LOADING LOGIC ---
+  const loadDashboardData = async () => {
+    try {
+      const [
+        analyticsRes,
+        pendingRes,
+        completedRes,
+        verifiedRes
+      ] = await Promise.all([
+        apiClient.get("/analytics"),
+        apiClient.get("/reports/pending"),
+        apiClient.get("/reports/completed"),
+        apiClient.get("/reports/verified")
+      ]);
+
+      setAnalytics(analyticsRes.data);
+      setPendingBeforeReports(pendingRes.data);
+      setCompletedPairs(completedRes.data.map(transformToPair));
+      setVerifiedPairs(verifiedRes.data.map(transformToPair));
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
+      showMessage("Could not load dashboard data.", "error");
+    }
+  };
+
+  useEffect(() => {
+    // Load data on component mount
+    loadDashboardData();
+  }, []);
 
   // --- EFFECT FOR CAMERA STREAM ---
   useEffect(() => {
@@ -113,7 +130,7 @@ const CitizenDashboard = ({ onLogout }) => {
         videoRef.current.play().catch((err) => console.error("[v0] Play error:", err))
       }
     }
-  }, [stream]) // This effect runs when the 'stream' state changes
+  }, [stream]) 
 
   // --- LOCATION & CAMERA LOGIC ---
   const requestLocation = (type) => {
@@ -132,7 +149,7 @@ const CitizenDashboard = ({ onLogout }) => {
             setHasLocationAfter(true)
           }
         },
-        () => alert("Failed to get location. Please enable location services."),
+        () => showMessage("Failed to get location. Please enable location services.", "error"),
       )
     }
   }
@@ -141,105 +158,135 @@ const CitizenDashboard = ({ onLogout }) => {
     setCameraType(type)
     setCameraOpen(true)
     if (!navigator.mediaDevices?.getUserMedia) {
-      alert("Your browser does not support camera access.")
-      setCameraOpen(false)
-      return
-    }
-
+      showMessage("Your browser does not support camera access.", "error")
+      setCameraOpen(false)
+      return
+    }
     navigator.mediaDevices
-      .getUserMedia({
-        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-        audio: false,
-      })
-      .then((stream) => {
-        streamRef.current = stream
-        setStream(stream)
-      })
-      .catch((err) => {
-        console.error("[v0] Camera error:", err)
-        alert(`Camera access denied: ${err.message}. Please check browser permissions.`)
-        setCameraOpen(false)
-      })
+      .getUserMedia({
+        video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      })
+      .then((stream) => {
+        streamRef.current = stream
+        setStream(stream)
+      })
+      .catch((err) => {
+        console.error("[v0] Camera error:", err)
+        showMessage(`Camera access denied. Please check browser permissions.`, "error")
+        setCameraOpen(false)
+      })
   }
 
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext("2d")
-    if (video.videoWidth === 0 || video.videoHeight === 0) return
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext("2d")
+    if (video.videoWidth === 0 || video.videoHeight === 0) return
 
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    ctx.drawImage(video, 0, 0)
-    const imageData = canvas.toDataURL("image/jpeg")
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    ctx.drawImage(video, 0, 0)
+    const imageData = canvas.toDataURL("image/jpeg", 0.9); 
 
-    if (cameraType === "before") {
-      setImageBefore(imageData)
-    } else if (cameraType === "after") {
-      setImageAfter(imageData)
-    }
-    stopCamera()
+    if (cameraType === "before") {
+      setImageBefore(imageData)
+    } else if (cameraType === "after") {
+      setImageAfter(imageData)
+    }
+    stopCamera()
   }
 
   const stopCamera = () => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-    setStream(null)
-    setCameraOpen(false)
-    setCameraType(null)
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    setStream(null)
+    setCameraOpen(false)
+    setCameraType(null)
   }
 
-  // --- SUBMIT LOGIC FOR FORM 1 ---
-  const handleSubmitBefore = () => {
+  // --- SUBMIT LOGIC FOR FORM 1 (Calls Backend) ---
+  const handleSubmitBefore = async () => {
     if (!imageBefore || !descriptionBefore || !hasLocationBefore) {
-      alert("Please provide image, description, and location access")
+      showMessage("Please provide image, description, and location access", "error")
       return
     }
+
     setIsSubmittingBefore(true)
-    setTimeout(() => {
-      const newSubmission = {
-        id: Date.now(),
-        type: 'before',
-        image: imageBefore,
+    setSubmissionStatus("Validating Image...");
+
+    try {
+      const base64Data = imageBefore.split(',')[1];
+      
+      const payload = {
+        image: base64Data,
+        lat: locationBefore.lat,
+        lon: locationBefore.lng,
         description: descriptionBefore,
-        location: locationBefore,
-        timestamp: new Date(),
-        status: "pending",
+        username: user?.username // <-- USE LOGGED-IN USER
+      };
+      
+      const response = await apiClient.post('/report', payload);
+
+      if (response.data.message === 'rejected') {
+        showMessage(`Report rejected: ${response.data.reason}. Please try a clearer photo.`, "error");
+        setIsSubmittingBefore(false);
+        setSubmissionStatus("Submit Report");
+        return;
       }
-      setSubmissions([newSubmission, ...submissions]) // Add to main state
-      setImageBefore(null)
-      setDescriptionBefore("")
-      setIsSubmittingBefore(false)
-      alert("Waste report submitted successfully!")
-    }, 1000)
+
+      if (response.data.message === 'accepted') {
+        setSubmissionStatus("Submitting...");
+        setImageBefore(null);
+        setDescriptionBefore("");
+        showMessage("Waste report submitted successfully!", "success");
+        setIsSubmittingBefore(false);
+        setSubmissionStatus("Submit Report");
+        loadDashboardData(); // Refresh all data
+      }
+
+    } catch (error) {
+      console.error("Submission failed:", error);
+      showMessage(error.response?.data?.error || "An error occurred.", "error");
+      setIsSubmittingBefore(false);
+      setSubmissionStatus("Submit Report");
+    }
   }
   
-  // --- SUBMIT LOGIC FOR FORM 2 ---
-  const handleSubmitAfter = () => {
-    if (!imageAfter || !hasLocationAfter) {
-      alert("Please provide image, description, and location access")
+  // --- SUBMIT LOGIC FOR FORM 2 (Calls Backend) ---
+  const handleSubmitAfter = async () => {
+    if (!imageAfter || !hasLocationAfter || !selectedReportId) {
+      showMessage("Please select a pending report, provide an image, and allow location.", "error")
       return
     }
     setIsSubmittingAfter(true)
-    setTimeout(() => {
-      const newSubmission = {
-        id: Date.now(),
-        type: 'after',
-        image: imageAfter,
+
+    try {
+      const base64Data = imageAfter.split(',')[1];
+      const payload = {
+        image: base64Data,
+        report_id: selectedReportId,
         description: descriptionAfter,
-        location: locationAfter,
-        timestamp: new Date(),
-        status: "pending",
-      }
-      setSubmissions([newSubmission, ...submissions]) // Add to main state
-      setImageAfter(null)
-      setDescriptionAfter("")
-      setIsSubmittingAfter(false)
-      alert("Cleanup photo submitted successfully!")
-    }, 1000)
+        username: user?.username // <-- USE LOGGED-IN USER
+      };
+      
+      await apiClient.post('/cleanup', payload);
+
+      setImageAfter(null);
+      setDescriptionAfter("");
+      setSelectedReportId("");
+      setIsSubmittingAfter(false);
+      showMessage("Cleanup photo submitted successfully!", "success");
+      loadDashboardData(); // Refresh all data
+
+    } catch (error) {
+      console.error("Cleanup submission failed:", error);
+      showMessage(error.response?.data?.error || "An error occurred.", "error");
+      setIsSubmittingAfter(false);
+    }
   }
 
   return (
@@ -257,7 +304,7 @@ const CitizenDashboard = ({ onLogout }) => {
               {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button
-              onClick={onLogout}
+              onClick={logout} // Use logout from useAuth
               className="px-4 py-2 bg-accent-red text-white rounded-lg hover:bg-accent-red-dark transition-all"
             >
               Logout
@@ -269,11 +316,11 @@ const CitizenDashboard = ({ onLogout }) => {
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
 
-        {/* --- ROW 1: ANALYTICS --- */}
+        {/* --- ROW 1: ANALYTICS (now from API) --- */}
         <Analytics 
-          pendingCount={pendingCount}
-          completedCount={completedCount}
-          verifiedCount={verifiedCount}
+          pendingCount={analytics?.pending_count || 0}
+          completedCount={analytics?.completed_count || 0}
+          verifiedCount={analytics?.verified_count || 0}
         />
 
         {/* --- ROW 2: FORMS (INDEPENDENT) --- */}
@@ -341,15 +388,32 @@ const CitizenDashboard = ({ onLogout }) => {
                 className="w-full py-3 px-4 bg-accent-green hover:bg-accent-green-dark disabled:bg-muted text-white rounded-lg font-semibold flex items-center justify-center gap-2"
               >
                 {isSubmittingBefore ? <Loader className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-                {isSubmittingBefore ? "Submitting..." : "Submit Report"}
+                {isSubmittingBefore ? submissionStatus : "Submit Report"}
               </motion.button>
             </div>
           </motion.div>
 
-          {/* SECTION 2: AFTER CLEANUP PHOTO (FORM 2) */}
+          {/* SECTION 2: AFTER CLEANUP PHOTO (FORM 2) - MODIFIED */}
           <motion.div initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}>
             <div className="bg-surface rounded-2xl p-8 border border-muted sticky top-24">
               <h2 className="text-2xl font-bold mb-6">After Cleanup Photo</h2>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-semibold mb-2">Which report did you clean up?</label>
+                <select
+                  value={selectedReportId}
+                  onChange={(e) => setSelectedReportId(e.target.value)}
+                  className="w-full px-4 py-3 bg-background border border-muted rounded-lg focus:outline-none focus:border-accent-green"
+                >
+                  <option value="">Select a pending report...</option>
+                  {pendingBeforeReports.map((report) => (
+                    <option key={report.id} value={report.id}>
+                      {report.description.substring(0, 50)}... (ID: {report.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {hasLocationAfter ? (
                 <motion.div className="p-4 bg-accent-green/10 border border-accent-green rounded-lg flex items-center gap-3 mb-6">
                   <Check className="w-5 h-5 text-accent-green" />
@@ -418,20 +482,19 @@ const CitizenDashboard = ({ onLogout }) => {
         <motion.div className="mb-12 relative z-10" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}>
           <div className="bg-surface rounded-2xl p-8 border border-muted">
             <h2 className="text-2xl font-bold mb-4">Waste Hotspots Map</h2>
-            {/* --- THIS LINE IS FIXED --- */}
             <p className="text-muted-foreground mb-4">
               Showing all 'Pending' status reports. Verified reports are removed.
             </p>
             <div className="h-[600px] rounded-lg overflow-hidden border border-muted">
               <Map 
-                submissions={submissions.filter(s => s.status === 'pending')} 
+                submissions={pendingBeforeReports.map(r => ({...r, location: { lat: r.lat, lng: r.lon }}))} // Format for Map
                 location={locationBefore || locationAfter} // Pass last known location
               />
             </div>
           </div>
         </motion.div>
 
-        {/* --- ROW 4: REPORT SECTIONS --- */}
+        {/* --- ROW 4: REPORT SECTIONS (now from API state) --- */}
         
         <ReportSection
           title="Pending Reports"
@@ -443,7 +506,7 @@ const CitizenDashboard = ({ onLogout }) => {
         <ReportSection
           title="Completed (Awaiting Verification)"
           subtitle='Paired "Before" and "After" photos that are waiting for an official to verify.'
-          reports={completedPairsPending}
+          reports={completedPairs}
           cardType="paired"
           statusText="Awaiting Verification"
           statusColor="blue"
@@ -454,7 +517,6 @@ const CitizenDashboard = ({ onLogout }) => {
           subtitle='Great work! These are your cleanup reports that have been officially verified.'
           reports={verifiedPairs}
           cardType="paired"
-        
           statusText="Verified"
           statusColor="green"
         />
@@ -463,6 +525,30 @@ const CitizenDashboard = ({ onLogout }) => {
       
       {/* This single canvas is used by both forms, depending on which one opens the camera */}
       <canvas ref={canvasRef} className="hidden" />
+
+      {/* --- MESSAGE MODAL --- */}
+      <AnimatePresence>
+        {message && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50"
+          >
+            <div className={`flex items-center gap-3 bg-surface border rounded-lg shadow-xl p-4 ${
+              message.type === 'error' ? 'border-accent-red' : 'border-muted'
+            }`}>
+              <Info className={`w-5 h-5 ${
+                message.type === 'error' ? 'text-accent-red' : 'text-accent-blue'
+              }`} />
+              <p className="text-foreground font-medium">{message.text}</p>
+              <button onClick={() => setMessage(null)} className="ml-2">
+                <X className="w-5 h-5 text-muted-foreground hover:text-foreground" />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
