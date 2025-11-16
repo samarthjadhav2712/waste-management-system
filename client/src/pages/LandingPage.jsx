@@ -4,6 +4,7 @@ import { Link } from "react-router-dom"
 import Header from "../components/Header" // <-- Restored original import
 import Footer from "../components/Footer" // <-- Restored original import
 import { useEffect, useRef } from "react"
+import WasteManagementImage from "../public/waste-management-pana.svg"
 
 // --- AnimatedCounter Component ---
 // This component counts up from 0 to the target number.
@@ -113,8 +114,9 @@ const LandingPage = () => {
 
       {/* Hero Section */}
       <section className="min-h-screen flex items-center justify-center px-4 md:px-8 overflow-hidden">
+        <div className="grid lg:grid-cols-2 gap-12 items-center max-w-6xl mx-auto">
         <motion.div
-          className="text-center max-w-4xl mx-auto -mt-30"
+          className="text-center lg:text-left max-w-4xl mx-auto -mt-30"
           initial="hidden"
           animate="visible"
         >
@@ -126,7 +128,7 @@ const LandingPage = () => {
             }}
           >
             <motion.div 
-              className="flex items-center justify-center mb-6"
+              className="flex items-center justify-center lg:justify-start mb-6"
               animate={{ y: [0, -10, 0] }} // Floating animation
               transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
             >
@@ -191,6 +193,24 @@ const LandingPage = () => {
             </motion.div>
           </motion.div>
         </motion.div>
+
+                        {/* --- NEW: Image Content --- */}
+          <motion.div 
+            className="hidden lg:block" // Only show on large screens
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+          >
+            {/* --- FIX: Use correct public path. --- 
+              Make sure your file is at /public/waste-management-pana.svg
+            */}
+            <img 
+              src={WasteManagementImage}
+              alt="Waste Management Illustration" 
+              className="w-full h-auto"
+            />
+          </motion.div>
+      </div>
       </section>
 
       {/* --- Features Section (Marquee) --- */}

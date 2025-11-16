@@ -9,7 +9,7 @@ const Header = () => {
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 md:px-8 py-6 flex items-center justify-between">
         <motion.div className="flex items-center gap-3" whileHover={{ scale: 1.05 }}>
           <div className="p-2 bg-accent-green rounded-lg">
             <Leaf className="w-6 h-6 text-background" />
